@@ -1,0 +1,6 @@
+@MokkilicoresExpressAPI_HostAddress = http://localhost:5045
+
+GET {{MokkilicoresExpressAPI_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
