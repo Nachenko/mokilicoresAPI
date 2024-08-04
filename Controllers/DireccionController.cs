@@ -1,6 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using MokkilicoresExpressAPI.Models;
-using Microsoft.Extensions.Caching.Memory;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace MokkilicoresExpressAPI.Controllers
 {
@@ -8,83 +11,65 @@ namespace MokkilicoresExpressAPI.Controllers
     [ApiController]
     public class DireccionController : ControllerBase
     {
-        private readonly IMemoryCache _cache;
-        private const string ClientesCacheKey = "Clientes";
-        private const string DireccionesCacheKey = "Direcciones";
+        private readonly ApplicationDbContext _context;
 
-
-        public DireccionController(IMemoryCache cache)
+        public DireccionController(ApplicationDbContext context)
         {
-            _cache = cache;
+            _context = context;
         }
 
         [HttpGet]
-        public ActionResult<IEnumerable<Direccion>> Get()
+        public async Task<ActionResult<IEnumerable<Direccion>>> Get()
         {
-            if (!_cache.TryGetValue(DireccionesCacheKey, out List<Direccion> direcciones))
-            {
-                direcciones = new List<Direccion>();
-                _cache.Set(DireccionesCacheKey, direcciones);
-            }
-            return Ok(direcciones);
+            return await _context.Direcciones.ToListAsync();
         }
 
         [HttpGet("{id}")]
-        public ActionResult<Direccion> Get(int id)
+        public async Task<ActionResult<Direccion>> Get(int id)
         {
-            var direcciones = _cache.Get<List<Direccion>>(DireccionesCacheKey);
-            var direccion = direcciones?.FirstOrDefault(d => d.Id == id);
+            var direccion = await _context.Direcciones.FindAsync(id);
             if (direccion == null)
                 return NotFound();
             return Ok(direccion);
         }
 
         [HttpGet("Usuario/{identificacion}")]
-        public ActionResult<IEnumerable<Direccion>> GetDireccionesByUsuario(string identificacion)
+        public async Task<ActionResult<IEnumerable<Direccion>>> GetDireccionesByUsuario(string identificacion)
         {
-            var clientes = _cache.Get<List<Cliente>>(ClientesCacheKey);
-            var cliente = clientes?.FirstOrDefault(c => c.Identificacion == identificacion);
-            
+            var cliente = await _context.Clientes.FirstOrDefaultAsync(c => c.Identificacion == identificacion);
+
             if (cliente == null)
             {
                 return NotFound("Cliente no encontrado");
             }
 
-            var direcciones = _cache.Get<List<Direccion>>(DireccionesCacheKey);
-            var direccionesCliente = direcciones?
+            var direccionesCliente = await _context.Direcciones
                 .Where(d => d.ClienteId == cliente.Id)
-                .Select(d => new Direccion
-                {
-                    Id = d.Id,
-                    ClienteId = d.ClienteId,
-                    Provincia = d.Provincia,
-                    Canton = d.Canton,
-                    Distrito = d.Distrito,
-                    PuntoEnWaze = d.PuntoEnWaze,
-                    EsCondominio = d.EsCondominio,
-                    EsPrincipal = d.EsPrincipal,
-                    DireccionCompleta = $"{d.Id} - {d.Provincia}, {d.Canton}, {d.Distrito}"
-                })
-                .ToList();
+                .ToListAsync();
 
             return Ok(direccionesCliente);
         }
 
         [HttpPost]
-        public ActionResult Post([FromBody] Direccion direccion)
+        public async Task<ActionResult> Post([FromBody] Direccion direccion)
         {
-            var direcciones = _cache.Get<List<Direccion>>(DireccionesCacheKey) ?? new List<Direccion>();
-            direccion.Id = direcciones.Count > 0 ? direcciones.Max(d => d.Id) + 1 : 1;
-            direcciones.Add(direccion);
-            _cache.Set(DireccionesCacheKey, direcciones);
+            if (direccion == null || !ModelState.IsValid)
+            {
+                return BadRequest("Datos de dirección no válidos.");
+            }
+            _context.Direcciones.Add(direccion);
+            await _context.SaveChangesAsync();
             return CreatedAtAction(nameof(Get), new { id = direccion.Id }, direccion);
         }
 
         [HttpPut("{id}")]
-        public ActionResult Put(int id, [FromBody] Direccion updatedDireccion)
+        public async Task<ActionResult> Put(int id, [FromBody] Direccion updatedDireccion)
         {
-            var direcciones = _cache.Get<List<Direccion>>(DireccionesCacheKey);
-            var direccion = direcciones?.FirstOrDefault(d => d.Id == id);
+            if (updatedDireccion == null || !ModelState.IsValid)
+            {
+                return BadRequest("Datos de dirección no válidos.");
+            }
+            var direccion = await _context.Direcciones.FindAsync(id);
             if (direccion == null)
                 return NotFound(new { Message = "Dirección no encontrada." });
 
@@ -95,28 +80,29 @@ namespace MokkilicoresExpressAPI.Controllers
             direccion.PuntoEnWaze = updatedDireccion.PuntoEnWaze;
             direccion.EsCondominio = updatedDireccion.EsCondominio;
             direccion.EsPrincipal = updatedDireccion.EsPrincipal;
-            _cache.Set(DireccionesCacheKey, direcciones);
 
+            await _context.SaveChangesAsync();
             return NoContent();
         }
 
         [HttpDelete("{id}")]
-        public ActionResult Delete(int id)
+        public async Task<ActionResult> Delete(int id)
         {
-            var direcciones = _cache.Get<List<Direccion>>(DireccionesCacheKey);
-            var direccion = direcciones?.FirstOrDefault(d => d.Id == id);
+            var direccion = await _context.Direcciones.FindAsync(id);
             if (direccion == null)
                 return NotFound(new { Message = "Dirección no encontrada." });
 
-            direcciones.Remove(direccion);
-            _cache.Set(DireccionesCacheKey, direcciones);
+            _context.Direcciones.Remove(direccion);
+            await _context.SaveChangesAsync();
             return Ok(new { Message = "Dirección eliminada correctamente." });
         }
 
         [HttpGet("Cliente/{clienteId}")]
-        public ActionResult<IEnumerable<Direccion>> GetDireccionesPorCliente(int clienteId)
+        public async Task<ActionResult<IEnumerable<Direccion>>> GetDireccionesPorCliente(int clienteId)
         {
-            var direcciones = _cache.Get<List<Direccion>>(DireccionesCacheKey)?.Where(d => d.ClienteId == clienteId).ToList();
+            var direcciones = await _context.Direcciones
+                .Where(d => d.ClienteId == clienteId)
+                .ToListAsync();
             return Ok(direcciones);
         }
     }

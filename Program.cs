@@ -75,7 +75,7 @@ internal class Program
         {
             app.UseSwagger();
             app.UseSwaggerUI();
-        };
+        }
 
         app.UseRouting();
 
@@ -103,40 +103,33 @@ internal class Program
 
         void InitializeCache(IServiceProvider services)
         {
-            var cache = services.GetRequiredService<IMemoryCache>();
-            const string ClienteCacheKey = "Clientes";
-            const string InventarioCacheKey = "Inventarios";
-            const string DireccionCacheKey = "Direcciones";
+            using (var scope = services.CreateScope())
+            {
+                var scopedServices = scope.ServiceProvider;
+                var cache = scopedServices.GetRequiredService<IMemoryCache>();
+                var context = scopedServices.GetRequiredService<ApplicationDbContext>();
 
-            if (!cache.TryGetValue(ClienteCacheKey, out List<Cliente> _))
-            {
-                List<Cliente> initialClientes = new List<Cliente>
-                {
-                    new Cliente { Id=1, Identificacion = "801460952", Nombre = "Ignacio", Apellido = "Fernandez", Provincia = "Heredia", Canton = "Flores", Distrito = "San Joaquin" },
-                    new Cliente { Id=0, Identificacion = "admin", Nombre = "Admin", Apellido = "Admin", Provincia = "_", Canton = "_", Distrito = "_"}
-                };
-                cache.Set(ClienteCacheKey, initialClientes, new MemoryCacheEntryOptions().SetSlidingExpiration(TimeSpan.FromMinutes(60)));
-            }
-            if (!cache.TryGetValue(InventarioCacheKey, out List<Inventario> _))
-            {
-                List<Inventario> initialInventarios = new List<Inventario>
-                {
-                    new Inventario { Id = 1, CantidadEnExistencia = 100, BodegaId = 1, FechaIngreso = DateTime.Now, FechaVencimiento = DateTime.Now.AddYears(1), TipoLicor = "Champagne" },
-                    new Inventario { Id = 2, CantidadEnExistencia = 500, BodegaId = 2, FechaIngreso = DateTime.Now, FechaVencimiento = DateTime.Now.AddYears(1), TipoLicor = "Vino Tinto" },
-                    new Inventario { Id = 3, CantidadEnExistencia = 150, BodegaId = 4, FechaIngreso = DateTime.Now, FechaVencimiento = DateTime.Now.AddYears(1), TipoLicor = "Whisky" },
-                    new Inventario { Id = 2, CantidadEnExistencia = 520, BodegaId = 3, FechaIngreso = DateTime.Now, FechaVencimiento = DateTime.Now.AddYears(1), TipoLicor = "Cerveza" }
-                };
-                cache.Set(InventarioCacheKey, initialInventarios, new MemoryCacheEntryOptions().SetSlidingExpiration(TimeSpan.FromMinutes(60)));
-            }
+                const string ClienteCacheKey = "Clientes";
+                const string InventarioCacheKey = "Inventarios";
+                const string DireccionCacheKey = "Direcciones";
 
-            if (!cache.TryGetValue(DireccionCacheKey, out List<Direccion> _))
-            {
-                List<Direccion> initialDirecciones = new List<Direccion>
+                if (!cache.TryGetValue(ClienteCacheKey, out List<Cliente> clientes))
                 {
-                    new Direccion { Id = 0, ClienteId = 0, Provincia = "Heredia", Canton = "Flores", Distrito = "San Joaquin", PuntoEnWaze = "waze://?ll=9.8998,-83.4444", EsCondominio = false, EsPrincipal = true },
-                    new Direccion { Id = 1, ClienteId = 1, Provincia = "San Jose", Canton = "San Jose", Distrito = "San Jose", PuntoEnWaze = "waze://?ll=9.9325,-84.0796", EsCondominio = true, EsPrincipal = false }
-                };
-                cache.Set(DireccionCacheKey, initialDirecciones, new MemoryCacheEntryOptions().SetSlidingExpiration(TimeSpan.FromMinutes(60)));
+                    clientes = context.Clientes.ToList();
+                    cache.Set(ClienteCacheKey, clientes, new MemoryCacheEntryOptions().SetSlidingExpiration(TimeSpan.FromMinutes(60)));
+                }
+
+                if (!cache.TryGetValue(InventarioCacheKey, out List<Inventario> inventarios))
+                {
+                    inventarios = context.Inventarios.ToList();
+                    cache.Set(InventarioCacheKey, inventarios, new MemoryCacheEntryOptions().SetSlidingExpiration(TimeSpan.FromMinutes(60)));
+                }
+
+                if (!cache.TryGetValue(DireccionCacheKey, out List<Direccion> direcciones))
+                {
+                    direcciones = context.Direcciones.ToList();
+                    cache.Set(DireccionCacheKey, direcciones, new MemoryCacheEntryOptions().SetSlidingExpiration(TimeSpan.FromMinutes(60)));
+                }
             }
         }
     }

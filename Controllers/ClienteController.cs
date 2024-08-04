@@ -1,8 +1,11 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using MokkilicoresExpressAPI.Models;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace MokkilicoresExpressAPI.Controllers
 {
@@ -10,70 +13,55 @@ namespace MokkilicoresExpressAPI.Controllers
     [ApiController]
     public class ClienteController : ControllerBase
     {
-        private readonly IMemoryCache _cache;
-        private const string CacheKey = "Clientes";
+        private readonly ApplicationDbContext _context;
 
-        public ClienteController(IMemoryCache cache)
+        public ClienteController(ApplicationDbContext context)
         {
-            _cache = cache;
+            _context = context;
         }
 
         [HttpGet]
-        public ActionResult<IEnumerable<Cliente>> Get()
+        public async Task<ActionResult<IEnumerable<Cliente>>> Get()
         {
-            if (!_cache.TryGetValue(CacheKey, out List<Cliente> clientes))
-            {
-                clientes = new List<Cliente>();
-                _cache.Set(CacheKey, clientes);
-            }
-            return Ok(clientes);
+            return await _context.Clientes.ToListAsync();
         }
 
-        
-
         [HttpGet("{id}")]
-        public ActionResult<Cliente> Get(int id)
+        public async Task<ActionResult<Cliente>> Get(int id)
         {
-            var clientes = _cache.Get<List<Cliente>>(CacheKey);
-            var cliente = clientes?.FirstOrDefault(c => c.Id == id);
+            var cliente = await _context.Clientes.FindAsync(id);
             if (cliente == null)
                 return NotFound();
             return Ok(cliente);
         }
 
-        
-
         [Authorize(Roles = "Admin")]
         [HttpPost]
-        public ActionResult Post([FromBody] Cliente cliente)
+        public async Task<ActionResult> Post([FromBody] Cliente cliente)
         {
             if (cliente == null || !ModelState.IsValid)
             {
                 return BadRequest("Datos de cliente no válidos.");
             }
-            var clientes = _cache.Get<List<Cliente>>(CacheKey);
-            cliente.Id = clientes.Count > 0 ? clientes.Max(c => c.Id) + 1 : 1;
-            clientes.Add(cliente);
-            _cache.Set(CacheKey, clientes);
+            _context.Clientes.Add(cliente);
+            await _context.SaveChangesAsync();
             return CreatedAtAction(nameof(Get), new { id = cliente.Id }, cliente);
         }
 
         [Authorize(Roles = "User, Admin")]
         [HttpPut("{id}")]
-        public ActionResult Put(int id, [FromBody] Cliente updatedCliente)
+        public async Task<ActionResult> Put(int id, [FromBody] Cliente updatedCliente)
         {
             if (updatedCliente == null || !ModelState.IsValid)
             {
                 return BadRequest("Datos de cliente no válidos.");
             }
             var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
-            var clientes = _cache.Get<List<Cliente>>(CacheKey);
-            var cliente = clientes?.FirstOrDefault(c => c.Id == id);
-            
+            var cliente = await _context.Clientes.FindAsync(id);
+
             if (cliente == null)
                 return NotFound();
-            
-            // Si el usuario no es admin, solo puede editar su propio perfil
+
             if (!User.IsInRole("Admin") && cliente.Identificacion != userId)
                 return Unauthorized();
 
@@ -85,26 +73,25 @@ namespace MokkilicoresExpressAPI.Controllers
             cliente.DineroCompradoTotal = updatedCliente.DineroCompradoTotal;
             cliente.DineroCompradoUltimoAno = updatedCliente.DineroCompradoUltimoAno;
             cliente.DineroCompradoUltimos6Meses = updatedCliente.DineroCompradoUltimos6Meses;
-            _cache.Set(CacheKey, clientes);
+
+            await _context.SaveChangesAsync();
             return NoContent();
         }
 
         [Authorize]
         [HttpDelete("{id}")]
-        public ActionResult Delete(int id)
+        public async Task<ActionResult> Delete(int id)
         {
-            var clientes = _cache.Get<List<Cliente>>(CacheKey);
-            var cliente = clientes?.FirstOrDefault(c => c.Id == id);
+            var cliente = await _context.Clientes.FindAsync(id);
             if (cliente == null)
                 return NotFound();
             if (!User.IsInRole("Admin"))
             {
                 return Unauthorized();
             }
-            clientes.Remove(cliente);
-            _cache.Set(CacheKey, clientes);
+            _context.Clientes.Remove(cliente);
+            await _context.SaveChangesAsync();
             return NoContent();
         }
-
     }
 }
