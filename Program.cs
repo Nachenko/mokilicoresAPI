@@ -68,7 +68,20 @@ internal class Program
             options.AddPolicy("UserPolicy", policy => policy.RequireRole("User"));
         });
 
+        // Add CORS policy
+        builder.Services.AddCors(options =>
+        {
+            options.AddPolicy("AllowAngularApp",
+                builder => builder
+                    .WithOrigins("http://localhost:4200")  // URL of your Angular app
+                    .AllowAnyHeader()
+                    .AllowAnyMethod());
+        });
+
         var app = builder.Build();
+
+        // Apply CORS policy
+        app.UseCors("AllowAngularApp");
 
         // Configurar el pipeline HTTP
         if (app.Environment.IsDevelopment())
